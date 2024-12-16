@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!-- saved from url=(0020)https://cal.lp.wiki/ -->
+<html lang="zh">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>剩余价值计算器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px
+        }
+
+        h1 {
+            text-align: center
+        }
+
+        form {
+            display: grid;
+            grid-template-columns:1fr 1fr;
+            gap: 15px
+        }
+
+        .full-width {
+            grid-column: 1 / -1
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px
+        }
+
+        input, select {
+            width: 100%;
+            padding: 5px;
+            box-sizing: border-box;
+            border: none;
+            border-bottom: solid 1px #c3c3c3;
+            outline: none
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+            width: 100%
+        }
+
+        #result {
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 20px
+        }
+    </style>
+</head>
+<body>
+<h1>剩余价值计算器</h1>
+<form id="calculator-form">
+    <div>
+        <label for="renewal-amount">续费金额:</label>
+        <input type="number" id="renewal-amount" step="0.01" required="" autofocus="">
+    </div>
+    <div>
+        <label for="currency">币种:</label>
+        <select id="currency" required="">
+            <option value="CNY">人民币 (CNY)</option>
+            <option value="USD">美元 (USD)</option>
+            <option value="EUR">欧元 (EUR)</option>
+            <option value="GBP">英镑 (GBP)</option>
+            <option value="AUD">澳元 (AUD)</option>
+            <option value="CAD">加元 (CAD)</option>
+        </select>
+    </div>
+
+
+    <div>
+        <label for="renewal-date" class="date-lable">续费日期:</label>
+        <input type="date" id="renewal-date" required="">
+    </div>
+
+    <div>
+        <label for="renewal-cycle">续费周期:</label>
+        <select id="renewal-cycle" required="">
+            <option value="12">1年</option>
+            <option value="1">1个月</option>
+            <option value="24">2年</option>
+            <option value="36">3年</option>
+        </select>
+    </div>
+
+    <div>
+        <label for="transaction-price">交易价格 (人民币):</label>
+        <input type="number" id="transaction-price" step="0.01">
+    </div>
+
+    <div>
+        <label for="transaction-date" class="date-lable">交易日期:</label>
+        <input type="date" id="transaction-date" required="">
+    </div>
+
+
+    <div>
+        <label for="exchange-rate">对人民币汇率:</label>
+        <input type="number" id="exchange-rate" step="0.0001" required="">
+    </div>
+
+    <div class="full-width">
+        <button type="submit">计算</button>
+    </div>
+</form>
+
+<div id="result">
+    <h2>计算结果</h2>
+    <p>续费金额: ¥0.00</p>
+    <p>剩余天数: 0天</p>
+    <p>剩余价值: ¥0.00</p>
+    <p>溢价: ¥-0.00</p>
+</div>
+
+<script>
+    const currencySelect = document.getElementById('currency');
+    const exchangeRateInput = document.getElementById('exchange-rate');
+    const transactionDateInput = document.getElementById('transaction-date');
+
+    function updateExchangeRate() {
+        fetch(`https://api.exchangerate-api.com/v4/latest/${currencySelect.value}`)
+            .then(response => response.json())
+            .then(data => {
+                exchangeRateInput.value = data.rates.CNY.toFixed(4);
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    currencySelect.addEventListener('change', updateExchangeRate);
+
+    function setDefaultTransactionDate() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
+        transactionDateInput.value = formattedDate;
+    }
+
+    updateExchangeRate();
+    setDefaultTransactionDate();
+
+    document.getElementById('calculator-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const exchangeRate = parseFloat(exchangeRateInput.value);
+        const renewalAmount = parseFloat(document.getElementById('renewal-amount').value);
+        const renewalDate = new Date(document.getElementById('renewal-date').value);
+        const renewalCycle = parseInt(document.getElementById('renewal-cycle').value);
+        const transactionPrice = parseFloat(document.getElementById('transaction-price').value);
+        const transactionDate = new Date(transactionDateInput.value);
+
+        let cycleDays;
+        if (renewalCycle % 12 === 0) {
+            cycleDays = (renewalCycle / 12) * 365;
+        } else {
+            cycleDays = renewalCycle * 30;
+        }
+
+        const dailyPrice = (renewalAmount * exchangeRate) / cycleDays;
+        const remainingDays = Math.max(0, Math.ceil((renewalDate - transactionDate) / (1000 * 60 * 60 * 24)));
+        const remainingValue = dailyPrice * remainingDays;
+        const premium = transactionPrice - remainingValue;
+        const renewalAmountRMB = renewalAmount * exchangeRate;
+
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = `
+                <h2>计算结果</h2>
+                <p>续费金额: ¥${renewalAmountRMB}</p>
+                <p>剩余天数: ${remainingDays}天</p>
+                <p>剩余价值: ¥${remainingValue.toFixed(2)}</p>
+                <p>溢价: ¥${premium.toFixed(2)}</p>
+            `;
+    });
+</script>
+
+</body>
+</html>
